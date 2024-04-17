@@ -19,10 +19,10 @@ import sqlite_utils
 
 @hookimpl
 def register_enrichments(datasette):
-    return [GmapGeocodeEnrichment()]
+    return [GmapElevationEnrichment()]
 
 
-class GmapGeocodeEnrichment(Enrichment):
+class GmapElevationEnrichment(Enrichment):
     name = "Google Maps API geocoder"
     slug = "gm_api_geocoder"
     description = "Geocode to latitude/longitude points using Google Mapss API geocoder"
@@ -40,7 +40,7 @@ class GmapGeocodeEnrichment(Enrichment):
 
         class ConfigForm(Form):
             input = TextAreaField(
-                "Geocode input",
+                "Get Elevation along input path on Earth",
                 description="A template to run against each row to generate geocoder input. Use {{ COL }} for columns.",
                 validators=[DataRequired(message="Prompt is required.")],
                 default=" ".join(["{{ %s }}" % c for c in text_columns]),
@@ -70,7 +70,7 @@ class GmapGeocodeEnrichment(Enrichment):
                 ],
             )
 
-        plugin_config = datasette.plugin_config("datasette-enrichments-gmap-geocode") or {}
+        plugin_config = datasette.plugin_config("datasette-enrichments-gmap-elevation") or {}
         api_key = plugin_config.get("api_key")
 
         return ConfigForm if api_key else ConfigFormWithKey

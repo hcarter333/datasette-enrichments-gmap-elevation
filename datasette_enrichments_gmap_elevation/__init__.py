@@ -23,9 +23,9 @@ def register_enrichments(datasette):
 
 
 class GmapElevationEnrichment(Enrichment):
-    name = "Google Maps API geocoder"
-    slug = "gm_api_geocoder"
-    description = "Geocode to latitude/longitude points using Google Mapss API geocoder"
+    name = "Google Maps API elevation"
+    slug = "gm_api_elevation"
+    description = "Return the elevation profile between two latitude/longitude points using Google Maps elevation API"
     batch_size = 1
     log_traceback = True
 
@@ -41,7 +41,7 @@ class GmapElevationEnrichment(Enrichment):
         class ConfigForm(Form):
             input = TextAreaField(
                 "Get Elevation along input path on Earth",
-                description="A template to run against each row to generate geocoder input. Use {{ COL }} for columns.",
+                description="A template to run against each row to generate elevation input. Use {{ COL }} for columns. Input should be lat,lng|lat,lng&samples=200",
                 validators=[DataRequired(message="Prompt is required.")],
                 default=" ".join(["{{ %s }}" % c for c in text_columns]),
             )
@@ -54,10 +54,10 @@ class GmapElevationEnrichment(Enrichment):
             )
 
         def stash_api_key(form, field):
-            if not hasattr(datasette, "_enrichments_gmap_geocode_stashed_keys"):
-                datasette._enrichments_gmap_geocode_stashed_keys = {}
+            if not hasattr(datasette, "_enrichments_gmap_elevation_stashed_keys"):
+                datasette._enrichments_gmap_elevation_stashed_keys = {}
             key = secrets.token_urlsafe(16)
-            datasette._enrichments_gmap_geocode_stashed_keys[key] = field.data
+            datasette._enrichments_gmap_elevation_stashed_keys[key] = field.data
             field.data = key
 
         class ConfigFormWithKey(ConfigForm):
@@ -76,7 +76,7 @@ class GmapElevationEnrichment(Enrichment):
         return ConfigForm if api_key else ConfigFormWithKey
 
     async def enrich_batch(self, rows, datasette, db, table, pks, config):
-        #  https://maps.googleapis.com/maps/api/geocode/json?address=URI-ENCODED-PLACENAME&key=b591350c2f9c48a7b7176660bbfd802a
+        #  https://maps.googleapis.com/maps/api/elevation/json?address=URI-ENCODED-PLACENAME&key=b591350c2f9c48a7b7176660bbfd802a
         url = "https://maps.googleapis.com/maps/api/elevation/json"
         params = {
             "key": resolve_api_key(datasette, config),
@@ -91,7 +91,8 @@ class GmapElevationEnrichment(Enrichment):
             input = input.replace("{{ %s }}" % key, str(value or "")).replace(
                 "{{%s}}" % key, str(value or "")
             )
-        params["address"] = input
+        params["path"] = input
+        print(params);
         async with httpx.AsyncClient() as client:
             response = await client.get(url, params=params)
         response.raise_for_status()
@@ -119,7 +120,7 @@ class ApiKeyError(Exception):
 
 
 def resolve_api_key(datasette, config):
-    plugin_config = datasette.plugin_config("datasette-enrichments-gmap-geocode") or {}
+    plugin_config = datasette.plugin_config("datasette-enrichments-gmap-elevation") or {}
     api_key = plugin_config.get("api_key")
     if api_key:
         return api_key
@@ -129,9 +130,9 @@ def resolve_api_key(datasette, config):
         raise ApiKeyError("No API key reference found in config")
     # Look it up in the stash
     #                          datasette_enrichments_gmaps_api_stashed_keys
-    if not hasattr(datasette, "_enrichments_gmap_geocode_stashed_keys"):
+    if not hasattr(datasette, "_enrichments_gmap_elevation_stashed_keys"):
         raise ApiKeyError("No API key stash found")
-    stashed_keys = datasette._enrichments_gmap_geocode_stashed_keys
+    stashed_keys = datasette._enrichments_gmap_elevation_stashed_keys
     if api_key_name not in stashed_keys:
         raise ApiKeyError("No API key found in stash for {}".format(api_key_name))
     return stashed_keys[api_key_name]

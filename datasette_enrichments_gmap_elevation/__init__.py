@@ -1,6 +1,8 @@
-#Follows model sest in 
+#Follows model 6est in 
 #https://github.com/datasette/datasette-enrichments-opencage/blob/main/datasette_enrichments_opencage/__init__.py
 #original version is copied from the above link
+from asyncio.windows_events import NULL
+from tarfile import NUL
 from datasette import hookimpl
 from datasette_enrichments import Enrichment
 from datasette.database import Database
@@ -15,6 +17,11 @@ import httpx
 import json
 import secrets
 import sqlite_utils
+import matplotlib.pyplot as plt
+import base64
+#from datasette_gis_partial_path import (gis_partial_path_lat_sql, gis_partial_path_lng_sql)
+
+chart_num = 0
 
 
 @hookimpl
@@ -77,6 +84,8 @@ class GmapElevationEnrichment(Enrichment):
 
     async def enrich_batch(self, rows, datasette, db, table, pks, config):
         #  https://maps.googleapis.com/maps/api/elevation/json?address=URI-ENCODED-PLACENAME&key=b591350c2f9c48a7b7176660bbfd802a
+        global chart_num
+        chart_num+=1
         url = "https://maps.googleapis.com/maps/api/elevation/json"
         params = {
             "key": resolve_api_key(datasette, config),
@@ -92,18 +101,41 @@ class GmapElevationEnrichment(Enrichment):
                 "{{%s}}" % key, str(value or "")
             )
         params["path"] = input
+        params["samples"] = "200"
         print(params);
         async with httpx.AsyncClient() as client:
             response = await client.get(url, params=params)
         response.raise_for_status()
         data = response.json()
+        distance = []
+        distance = range(200)
+        elevation = []
+
+        print(data)
         if not data["results"]:
             raise ValueError("No results found for {}".format(input))
-        result = data["results"][0]
+        for result in data["results"]:
+            elevation.append(float(result["elevation"]))
+        plt.plot(distance,elevation)
+        plt.xlabel('Distance')
+        plt.ylabel('Elevation')
+        plt.title('Elevation Profile')
+        plt.grid(True)
+        plt.savefig('elevation_chart'+str(chart_num)+'.png')
+        png_data = NULL
+        with open('elevation_chart'+str(chart_num)+'.png', 'rb') as file:
+            png_data = file.read()
+        
+        e_p = ""
+        e_p = base64.b64encode(png_data).decode('utf-8')
+        #Now! Place it in the column!
+        result = '{"img_src": "data:image/png;base64,' + e_p + '"}'
+        print("The result is " + str(result))
         update = {
-            "latitude": result["geometry"]["location"]["lat"],
-            "longitude": result["geometry"]["location"]["lng"],
+            "elevation": result,
         }
+        plt.clf()
+        plt.cla()
         if json_column:
             update[json_column] = json.dumps(data)
 

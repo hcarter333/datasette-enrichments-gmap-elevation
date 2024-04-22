@@ -19,7 +19,7 @@ import secrets
 import sqlite_utils
 import matplotlib.pyplot as plt
 import base64
-#from datasette_gis_partial_path import (gis_partial_path_lat_sql, gis_partial_path_lng_sql)
+from datasette_gis_partial_path import (gis_partial_path_lat_sql, gis_partial_path_lng_sql)
 
 chart_num = 0
 
@@ -100,7 +100,14 @@ class GmapElevationEnrichment(Enrichment):
             input = input.replace("{{ %s }}" % key, str(value or "")).replace(
                 "{{%s}}" % key, str(value or "")
             )
-        params["path"] = input
+        #params["path"] = input
+        eps = input.split("|")
+        coords_st = eps[0] + "," + eps[1]
+        coords = coords_st.split(",")
+        print("Sending = " + str(coords[0]) + "," + str(coords[1]) + "|" + str(coords[2]) + "," + str(coords[3]))
+        p_lat=gis_partial_path_lat_sql(str(coords[0]),str(coords[1]),str(coords[2]),str(coords[3]),200)
+        p_lng=gis_partial_path_lng_sql(str(coords[0]),str(coords[1]),str(coords[2]),str(coords[3]),200)
+        params["path"] = str(coords[0]) + "," + str(coords[1]) + "|" + str(p_lat) + "," + str(p_lng)
         params["samples"] = "200"
         print(params);
         async with httpx.AsyncClient() as client:
@@ -110,7 +117,7 @@ class GmapElevationEnrichment(Enrichment):
         distance = []
         distance = range(200)
         elevation = []
-
+        #v=gis_partial_path_lat(0,7,9,12,100)
         print(data)
         if not data["results"]:
             raise ValueError("No results found for {}".format(input))

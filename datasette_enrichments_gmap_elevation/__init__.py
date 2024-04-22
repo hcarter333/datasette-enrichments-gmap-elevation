@@ -19,7 +19,9 @@ import secrets
 import sqlite_utils
 import matplotlib.pyplot as plt
 import base64
-from datasette_gis_partial_path import (gis_partial_path_lat_sql, gis_partial_path_lng_sql)
+import numpy as np
+from scipy.stats import linregress
+from plugins.datasette_gis_partial_path import (gis_partial_path_lat_sql, gis_partial_path_lng_sql)
 
 chart_num = 0
 
@@ -128,6 +130,16 @@ class GmapElevationEnrichment(Enrichment):
         plt.ylabel('Elevation')
         plt.title('Elevation Profile')
         plt.grid(True)
+        ax = plt.gca()
+        # Select the first 40 data points
+        distance_subset = distance[:40]
+        elevation_subset = elevation[:40]
+        slope, intercept, r_value, p_value, std_err = linregress(distance_subset, elevation_subset)
+        angle_radians = np.arctan(slope)
+        angle_degrees = np.degrees(angle_radians)
+        slope_st = "2" + "\u03bb" + "slope = " + str(angle_degrees) + "\u00b0"
+        plt.text(0.2, 0.1, slope_st, fontsize=12, ha='left', transform=ax.transAxes)
+
         plt.savefig('elevation_chart'+str(chart_num)+'.png')
         png_data = NULL
         with open('elevation_chart'+str(chart_num)+'.png', 'rb') as file:

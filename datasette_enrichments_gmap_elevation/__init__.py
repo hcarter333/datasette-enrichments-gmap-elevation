@@ -151,7 +151,7 @@ class GmapElevationEnrichment(Enrichment):
         result = '{"img_src": "data:image/png;base64,' + e_p + '"}'
         print("The result is " + str(result))
         update = {
-            "elevation": result,
+            "json_elevation": json.dumps(data),
         }
         plt.clf()
         plt.cla()

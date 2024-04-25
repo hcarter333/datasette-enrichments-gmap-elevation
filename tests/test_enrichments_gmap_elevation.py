@@ -27,7 +27,7 @@ async def test_enrichment(tmpdir, api_key_from_config, store_json_column, httpx_
     )
     db_path = str(tmpdir / "data.db")
     db = sqlite_utils.Database(db_path)
-    db["addresses"].insert(
+    db["qsos"].insert(
         {"id": 1, 
          "rx_lat": "44.2532728161084", 
          "rx_lng": "-116.97441831097",
@@ -39,17 +39,17 @@ async def test_enrichment(tmpdir, api_key_from_config, store_json_column, httpx_
 
     metadata = {}
     if api_key_from_config:
-        metadata["plugins"] = {"datasette-enrichments-opencage": {"api_key": "abc123"}}
+        metadata["plugins"] = {"datasette-enrichments-gmap-elevation": {"api_key": "abc123"}}
     datasette = Datasette([db_path], metadata=metadata)
 
     cookies = {"ds_actor": datasette.sign({"a": {"id": "root"}}, "actor")}
     csrftoken = (
-        await datasette.client.get("/-/enrich/data/addresses/opencage", cookies=cookies)
+        await datasette.client.get("/-/enrich/data/addresses/gm_api_elevation", cookies=cookies)
     ).cookies["ds_csrftoken"]
     cookies["ds_csrftoken"] = csrftoken
 
     post = {
-        "input": "{{ address }}",
+        "input": "{{ tx_lat }},{{ tx_lng }}|{{ rx_lat }},{{ rx_lng }}",
         "csrftoken": cookies["ds_csrftoken"],
     }
     if not api_key_from_config:
@@ -58,7 +58,7 @@ async def test_enrichment(tmpdir, api_key_from_config, store_json_column, httpx_
         post["json_column"] = "details"
 
     response = await datasette.client.post(
-        "/-/enrich/data/addresses/opencage",
+        "/-/enrich/data/addresses/gm_api_elevation",
         data=post,
         cookies=cookies,
     )

@@ -23,7 +23,6 @@ import numpy as np
 from scipy.stats import linregress
 from plugins.datasette_gis_partial_path import (gis_partial_path_lat_sql, gis_partial_path_lng_sql)
 
-chart_num = 0
 
 
 @hookimpl
@@ -50,16 +49,9 @@ class GmapElevationEnrichment(Enrichment):
         class ConfigForm(Form):
             input = TextAreaField(
                 "Get Elevation along input path on Earth",
-                description="A template to run against each row to generate elevation input. Use {{ COL }} for columns. Input should be lat,lng|lat,lng&samples=200",
+                description="A template to run against each row to generate elevation input. Use {{ COL }} for columns. Input should be lat,lng|lat,lng,pathlength_meters,samples",
                 validators=[DataRequired(message="Prompt is required.")],
                 default=" ".join(["{{ %s }}" % c for c in text_columns]),
-            )
-            json_column = StringField(
-                "Store JSON in column",
-                description="To store full JSON from Google Maps API, enter a column name here",
-                render_kw={
-                    "placeholder": "Leave this blank if you only want to store latitude/longitude"
-                },
             )
 
         def stash_api_key(form, field):
@@ -85,79 +77,38 @@ class GmapElevationEnrichment(Enrichment):
         return ConfigForm if api_key else ConfigFormWithKey
 
     async def enrich_batch(self, rows, datasette, db, table, pks, config):
-        #  https://maps.googleapis.com/maps/api/elevation/json?address=URI-ENCODED-PLACENAME&key=b591350c2f9c48a7b7176660bbfd802a
-        global chart_num
-        chart_num+=1
+        
         url = "https://maps.googleapis.com/maps/api/elevation/json"
         params = {
             "key": resolve_api_key(datasette, config),
             "limit": 1,
         }
-        json_column = config.get("json_column")
-        if not json_column:
-            params["no_annotations"] = 1
+        params["no_annotations"] = 1
         row = rows[0]
         input = config["input"]
         for key, value in row.items():
             input = input.replace("{{ %s }}" % key, str(value or "")).replace(
                 "{{%s}}" % key, str(value or "")
             )
-        #params["path"] = input
         eps = input.split("|")
         coords_st = eps[0] + "," + eps[1]
         coords = coords_st.split(",")
-        print("Sending = " + str(coords[0]) + "," + str(coords[1]) + "|" + str(coords[2]) + "," + str(coords[3]))
-        p_lat=gis_partial_path_lat_sql(str(coords[0]),str(coords[1]),str(coords[2]),str(coords[3]),200)
-        p_lng=gis_partial_path_lng_sql(str(coords[0]),str(coords[1]),str(coords[2]),str(coords[3]),200)
+        print("Sending = " + str(coords[0]) + "," + str(coords[1]) + "|" + str(coords[2]) + "," + str(coords[3]) + " " + str(coords[4]) + " " + str(coords[5]))
+        p_lat=gis_partial_path_lat_sql(str(coords[0]),str(coords[1]),str(coords[2]),str(coords[3]),str(coords[4]))
+        p_lng=gis_partial_path_lng_sql(str(coords[0]),str(coords[1]),str(coords[2]),str(coords[3]),str(coords[4]))
         params["path"] = str(coords[0]) + "," + str(coords[1]) + "|" + str(p_lat) + "," + str(p_lng)
-        params["samples"] = "200"
+        params["samples"] = str(coords[5])
         print(params);
         async with httpx.AsyncClient() as client:
             response = await client.get(url, params=params)
         response.raise_for_status()
-        data = response.json()
-        distance = []
-        distance = range(200)
-        elevation = []
-        #v=gis_partial_path_lat(0,7,9,12,100)
-        print(data)
-        if not data["results"]:
-            raise ValueError("No results found for {}".format(input))
-        for result in data["results"]:
-            elevation.append(float(result["elevation"]))
-        plt.plot(distance,elevation)
-        plt.xlabel('Distance')
-        plt.ylabel('Elevation')
-        plt.title('Elevation Profile')
-        plt.grid(True)
-        ax = plt.gca()
-        # Select the first 40 data points
-        distance_subset = distance[:40]
-        elevation_subset = elevation[:40]
-        slope, intercept, r_value, p_value, std_err = linregress(distance_subset, elevation_subset)
-        angle_radians = np.arctan(slope)
-        angle_degrees = np.degrees(angle_radians)
-        slope_st = "2" + "\u03bb" + "slope = " + str(angle_degrees) + "\u00b0"
-        plt.text(0.2, 0.1, slope_st, fontsize=12, ha='left', transform=ax.transAxes)
-
-        plt.savefig('elevation_chart'+str(chart_num)+'.png')
-        png_data = NULL
-        with open('elevation_chart'+str(chart_num)+'.png', 'rb') as file:
-            png_data = file.read()
         
-        e_p = ""
-        e_p = base64.b64encode(png_data).decode('utf-8')
+        data = response.json()
+
         #Now! Place it in the column!
-        result = '{"img_src": "data:image/png;base64,' + e_p + '"}'
-        print("The result is " + str(result))
         update = {
             "json_elevation": json.dumps(data),
         }
-        plt.clf()
-        plt.cla()
-        if json_column:
-            update[json_column] = json.dumps(data)
-
         ids = [row[pk] for pk in pks]
 
         def do_update(conn):

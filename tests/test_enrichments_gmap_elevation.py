@@ -69,12 +69,12 @@ async def test_enrichment(tmpdir, api_key_from_config, store_json_column, httpx_
 
     expected_columns = {
         "id": int,
-        "address": str,
-        "latitude": float,
-        "longitude": float,
+        "rx_lat": "44.2532728161084", 
+        "rx_lng": "-116.97441831097",
+        "tx_lat": "35.2656427805527", 
+        "tx_lng": "-105.333232818105",
+        "json_elevation": text,
     }
-    if store_json_column:
-        expected_columns["details"] = str
 
     assert db["addresses"].columns_dict == expected_columns
 
